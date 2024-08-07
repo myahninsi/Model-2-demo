@@ -129,7 +129,7 @@ else:
                         continue
 
                     # Oversample the minority classes (0 and 1) in the training set
-                    smote = SMOTE(random_state=42)
+                    smote = SMOTE(random_state=42, k_neighbors=min(2, len(y_train) - 1))
                     try:
                         X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
                     except ValueError as e:
