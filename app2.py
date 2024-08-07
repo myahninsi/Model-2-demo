@@ -130,7 +130,11 @@ else:
 
                     # Oversample the minority classes (0 and 1) in the training set
                     smote = SMOTE(random_state=42)
-                    X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
+                    try:
+                        X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
+                    except ValueError as e:
+                        st.error(f"Error during SMOTE resampling: {e}")
+                        continue
 
                     clf.fit(X_train_resampled, y_train_resampled)
                     y_pred = clf.predict(X_test)
