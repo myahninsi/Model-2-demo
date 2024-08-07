@@ -15,6 +15,7 @@ import xgboost as xgb
 import os
 import yfinance as yf
 import ta
+import time
 
 # Enhanced debugging
 st.write("Starting the Streamlit app")
@@ -60,7 +61,10 @@ else:
                 st.error(f"Error loading data for ticker {ticker}: {e}")
                 return pd.DataFrame()
 
+        start_time = time.time()
         data = load_data(ticker)
+        end_time = time.time()
+        st.write(f"Data loaded in {end_time - start_time:.2f} seconds.")
 
         # Check if data is loaded correctly
         if data.empty:
@@ -152,3 +156,12 @@ else:
                 st.write(f"{name}: {score:.4f}")
 
             st.write(f"\nBest Classifier: {best_classifier.__class__.__name__} with score: {best_score:.4f}")
+
+            # Display confusion matrix and classification report for the best classifier
+            y_pred_best = best_classifier.predict(X_scaled)
+            st.write("### Classification Report")
+            st.text(classification_report(y, y_pred_best))
+            st.write("### Confusion Matrix")
+            confusion_mtx = confusion_matrix(y, y_pred_best)
+            sns.heatmap(confusion_mtx, annot=True, fmt="d", cmap="Blues", xticklabels=['Down', 'Up', 'Neutral'], yticklabels=['Down', 'Up', 'Neutral'])
+            st.pyplot(plt)
