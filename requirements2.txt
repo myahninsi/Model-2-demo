@@ -8,3 +8,4 @@ yfinance
 tensorflow
 ta
 xgboost
+imbalanced-learn
