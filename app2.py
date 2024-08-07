@@ -1,6 +1,6 @@
-import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 import seaborn as sns
 import streamlit as st
 from sklearn.model_selection import TimeSeriesSplit
@@ -9,14 +9,18 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
 from imblearn.over_sampling import SMOTE
 import xgboost as xgb
 import os
 import yfinance as yf
 import ta
 
+# Enhanced debugging
+st.write("Starting the Streamlit app")
+
 # Load company data
-company_data_path = r"final_v2.csv"  # Use relative path
+company_data_path = "final_v2.csv"  # Adjust the path as needed
 
 if not os.path.exists(company_data_path):
     st.error(f"The file {company_data_path} does not exist. Please ensure the file is uploaded correctly.")
@@ -82,45 +86,51 @@ else:
             X = data[selected_indicators]
             y = data['Target']
 
+            # Handle missing values by filling with mean
+            imputer = SimpleImputer(strategy='mean')
+            X_imputed = imputer.fit_transform(X)
+
             # Scale the data
             scaler = StandardScaler()
-            X_scaled = scaler.fit_transform(X)
+            X_scaled = scaler.fit_transform(X_imputed)
 
-            # Check class distribution
-            st.write("Class distribution before resampling:")
-            st.write(y.value_counts())
-
-            # Define classifiers
+            # Define classifiers to compare for best model selection
             classifiers = {
                 'GradientBoosting': GradientBoostingClassifier(random_state=42),
                 'RandomForest': RandomForestClassifier(random_state=42, class_weight='balanced'),
                 'AdaBoost': AdaBoostClassifier(random_state=42),
                 'LogisticRegression': LogisticRegression(random_state=42, max_iter=10000, class_weight='balanced'),
                 'SVM': SVC(random_state=42, class_weight='balanced'),
-                'XGBoost': xgb.XGBClassifier(random_state=42, scale_pos_weight=1)  # Adjust scale_pos_weight as needed
+                'XGBoost': xgb.XGBClassifier(random_state=42, scale_pos_weight=1)
             }
 
             # Use TimeSeriesSplit for time series cross-validation
             tscv = TimeSeriesSplit(n_splits=5)
 
-            # Oversample the minority classes in the training set
-            oversampler = SMOTE(random_state=42, k_neighbors=2)  # Reduce k_neighbors to handle small class sizes
-
             # Compare classifiers using time series cross-validation
+            best_classifier = None
             best_score = 0
             results = {}
 
             for name, clf in classifiers.items():
                 scores = []
                 for train_index, test_index in tscv.split(X_scaled):
-                    # Convert train and test indices to lists
-                    train_index = list(train_index)
-                    test_index = list(test_index)
-
                     X_train, X_test = X_scaled[train_index], X_scaled[test_index]
                     y_train, y_test = y.iloc[train_index], y.iloc[test_index]
 
-                    X_train_resampled, y_train_resampled = oversampler.fit_resample(X_train, y_train)
+                    # Check for NaN values and handle them
+                    if np.any(np.isnan(X_train)) or np.any(np.isnan(y_train)):
+                        st.error("NaN values detected in training data. Please ensure there are no missing values.")
+                        break
+
+                    # Ensure there are enough samples for SMOTE
+                    if len(np.unique(y_train)) < 2:
+                        st.warning(f"Not enough samples to apply SMOTE for class {np.unique(y_train)}")
+                        continue
+
+                    # Oversample the minority classes (0 and 1) in the training set
+                    smote = SMOTE(random_state=42)
+                    X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
 
                     clf.fit(X_train_resampled, y_train_resampled)
                     y_pred = clf.predict(X_test)
@@ -138,44 +148,3 @@ else:
                 st.write(f"{name}: {score:.4f}")
 
             st.write(f"\nBest Classifier: {best_classifier.__class__.__name__} with score: {best_score:.4f}")
-
-            # Train the best classifier on the full training set
-            train_index, test_index = list(tscv.split(X_scaled))[-1]
-            X_train, X_test = X_scaled[train_index], X_scaled[test_index]
-            y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-
-            X_train_resampled, y_train_resampled = oversampler.fit_resample(X_train, y_train)
-
-            best_classifier.fit(X_train_resampled, y_train_resampled)
-
-            # Predict the model on the last split
-            y_pred = best_classifier.predict(X_test)
-
-            # Evaluate the model
-            classification_report_result = classification_report(y_test, y_pred, output_dict=True)
-            confusion_matrix_result = confusion_matrix(y_test, y_pred)
-            accuracy_result = accuracy_score(y_test, y_pred)
-
-            # Convert classification report to DataFrame
-            classification_report_df = pd.DataFrame(classification_report_result).transpose()
-
-            # Print the evaluation metrics
-            st.write("### Classification Report")
-            st.table(classification_report_df)
-            st.write("### Confusion Matrix")
-            st.write(confusion_matrix_result)
-            st.write(f"### Accuracy Score: {accuracy_result:.4f}")
-
-            # Visualize the confusion matrix
-            fig, ax = plt.subplots(figsize=(8, 6))
-            sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt='d', cmap='Blues', xticklabels=['Down', 'Up', 'Neutral'], yticklabels=['Down', 'Up', 'Neutral'], ax=ax)
-            plt.xlabel('Predicted')
-            plt.ylabel('Actual')
-            plt.title('Confusion Matrix')
-            st.pyplot(fig)
-
-            # Make predictions for the entire dataset
-            data['Predicted'] = best_classifier.predict(scaler.transform(data[selected_indicators]))
-
-            st.write("### Data with Predictions")
-            st.write(data[['Close', 'Target', 'Predicted']].tail(15))
