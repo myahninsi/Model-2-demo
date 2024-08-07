@@ -16,7 +16,7 @@ import yfinance as yf
 import ta
 
 # Load company data
-company_data_path = r"C:\Users\Home\Downloads\Lambton\MHS\2nd Term\AI\Group Project\Demo\AI demo code 2\final_v2.csv"  # Use relative path
+company_data_path = r"final_v2.csv"  # Use relative path
 
 if not os.path.exists(company_data_path):
     st.error(f"The file {company_data_path} does not exist. Please ensure the file is uploaded correctly.")
